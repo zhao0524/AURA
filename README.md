@@ -4,6 +4,19 @@ Architectural Understanding & Rendering Agent
 
 Upload any floor plan image. Describe your use case in plain English. Walk through a fully configured 3D scene in seconds.
 
+A.U.R.A turns a static 2D floor plan into an explorable, furnished 3D space. Gemini Vision reads the plan's rooms, walls, and doors; a three-stage agent pipeline places furniture and fixtures for the use case you describe (a family home, an office, a clinic); and the result opens in an in-browser 3D viewer you can walk through, edit, and share.
+
+**Live demo:** https://aura-bay-nu.vercel.app/
+
+## Features
+
+- **Floor plan to 3D** — upload a PNG/JPG/WebP plan and get a normalized 3D scene with walls, doors, and rooms.
+- **Use-case-aware furnishing** — describe how the space will be used and the placement agent furnishes it accordingly.
+- **Walk and orbit modes** — explore in first person or orbit the model, with a top-down minimap.
+- **Scene editor** — select, move, add, and delete objects in the sidebar inspector, then save a shareable copy.
+- **Bring your own Gemini key** — visitors can paste their own Gemini API key on the landing page; it is stored in the browser and sent with uploads instead of the server key.
+- **Resilient pipeline** — Backboard → direct Gemini → rule-based fallbacks, plus SHA-256 caching of repeat uploads.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -46,7 +59,7 @@ App runs on [http://localhost:3000](http://localhost:3000).
 
 ## Environment
 
-The root `.env.example` is the only active environment template for FloorPlan AI.
+The root `.env.example` is the only active environment template. (The internal package name is still `floorplan-ai`.)
 
 **Required variables:**
 - `APP_BASE_URL` — Public base URL (e.g. `http://localhost:3000`)
@@ -91,9 +104,10 @@ components/
   MiniMap.tsx                     # Top-down 2D minimap overlay
   landing/
     Navigation.tsx                # Top navigation bar for landing page
-    SplashScreen.tsx              # Animated intro splash screen
     ScrollSimulation.tsx          # Scroll-driven animation controller
     Sections.tsx                  # All landing page content sections
+    GeminiKeyModal.tsx            # Bring-your-own Gemini API key dialog
+    DemoVideoModal.tsx            # Demo video dialog
     WaitlistModal.tsx             # Waitlist sign-up modal
     three/
       FestivalScene.tsx           # Three.js festival/crowd 3D scene (landing)
@@ -117,7 +131,7 @@ lib/
   db.ts                           # PostgreSQL client + query methods
   utils.ts                        # Shared utility functions (cn, etc.)
   festivalData.ts                 # Static data for the landing festival scene
-  local-dev-fallback.ts           # Local dev mode when infra is unavailable
+  demo-scene.ts                   # Deterministic Test.webp demo flow (no Gemini/DB)
   placement-resolver.ts           # Post-process AI object placements
   scene-validation.ts             # Parse + normalize scene JSON from agents
   agents/
@@ -132,6 +146,7 @@ types/
 public/
   demo/
     example-scene.json            # Checked-in sample scene for local frontend work
+  Test.webp                       # Demo floor plan that triggers the pre-baked scene
   blueprint-bg.png                # Background image asset
   fp-1.png … fp-10.png           # Sample floor plan images
   floorplan-12.png … floorplan-21.png  # Additional sample floor plan images
@@ -143,6 +158,8 @@ scripts/
 migrations/
   002_floorplan_ai_schema.sql     # Core PostgreSQL schema (jobs + scenes tables)
   003_add_image_hash.sql          # Adds image_hash column for content-addressed caching
+
+deploy/                           # Vultr VPS deployment (Nginx, PM2, setup scripts)
 
 legacy/
   aura-backend/                   # Archived A.U.R.A backend (inactive)
@@ -187,10 +204,18 @@ The completed scene JSON is uploaded to Vultr Object Storage and metadata is sav
 | `GET` | `/api/scene/[sceneId]` | Fetch full normalized scene JSON |
 | `POST` | `/api/scene/save` | Save an edited scene → `{ newSceneId, shareUrl }` |
 
-## Local Development Fallback
+## Demo Flow
 
-When `NODE_ENV !== 'production'`, if Vultr or the database is unreachable, the app falls back to serving `public/demo/example-scene.json` and tracking job state in `.next/local-dev-jobs.json`. This keeps the frontend fully usable without live infrastructure.
+Uploading a file named exactly `Test.webp` (the asset in `public/Test.webp`) bypasses Gemini, the database, and object storage. The app plays a deterministic progress sequence and opens a pre-baked 3D scene, which is useful for presentations and screen recordings. See `lib/demo-scene.ts`.
+
+## Bring Your Own Gemini Key
+
+The landing page lets visitors save their own Gemini API key in `localStorage`. The upload form sends it in the `x-gemini-api-key` header (and as a form field), and the pipeline uses it in place of the server's `GEMINI_API_KEY` for that job.
+
+## Deployment
+
+The app can run on Vercel or on a Vultr Cloud Compute VPS (Ubuntu, Node 20, PM2, Nginx) using Vultr Managed PostgreSQL and Object Storage. See [`deploy/README.md`](deploy/README.md) for the step-by-step VPS guide and scripts.
 
 ## Legacy Files
 
-The archived A.U.R.A codebase lives under `legacy/`. It is kept for reference only and is not part of the active FloorPlan AI setup, env flow, or tooling.
+The archived first version of A.U.R.A lives under `legacy/`. It is kept for reference only and is not part of the active setup, env flow, or tooling.
